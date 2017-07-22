@@ -47,7 +47,6 @@ def main():
 
     # Only use once, then use the pickle file afterwards
     # pull_top_1000_movies_from_internet()
-
     top1000_movies = load_top1000_movies_from_pickle()
 
     # make_and_show_heatmap(top1000_movies)
@@ -57,6 +56,8 @@ def main():
     # pull_movies_for_all_unique_genre_pairs_from_internet()
     movies = load_movies_for_all_unique_genre_pairs_from_pickle()
     unique_movies = remove_duplicates(movies)
+
+    movies_with_overviews = remove_movies_without_overviews(unique_movies)
 
     # Only use once, then use the pickle file afterwards
     # pull_posters_for_movies_from_internet(unique_movies)
@@ -79,9 +80,18 @@ def remove_duplicates(movies):
     return no_duplicate_movies
 
 
-def make_and_show_heatmap(movies_list):
+def remove_movies_without_overviews(movies):
+    movies_with_overviews = []
+    for m in movies:
+        if len(m['overview']) != 0:
+            movies_with_overviews.append(m)
+
+    return movies_with_overviews
+
+
+def make_visgrid(movies):
     allPairs = []
-    for movie in movies_list:
+    for movie in movies:
         allPairs.extend(list2pairs(movie['genre_ids']))
 
     num_ids = np.unique(allPairs)
@@ -93,28 +103,23 @@ def make_and_show_heatmap(movies_list):
             visGrid[np.argwhere(num_ids == p[1]),
                     np.argwhere(num_ids == p[0])] += 1
 
-    annot_lookup = []
-    for i in range(len(num_ids)):
-        annot_lookup.append(Genre_ID_to_name[num_ids[i]])
+    return visGrid
 
-    sns.heatmap(visGrid, xticklabels=annot_lookup, yticklabels=annot_lookup)
+
+def make_and_show_heatmap(movies):
+    visgrid = make_visgrid(movies)
+
+    genre_names = []
+    for i in range(len(num_ids)):
+        genre_names.append(Genre_ID_to_name[num_ids[i]])
+
+    sns.heatmap(visGrid, xticklabels=genre_names, yticklabels=genre_names)
     plt.title("Heatmap of pairings of genres")
     plt.show()
 
 
-def cluster_data_and_show_heatmap(movies_list):
-    allPairs = []
-    for movie in movies_list:
-        allPairs.extend(list2pairs(movie['genre_ids']))
-
-    num_ids = np.unique(allPairs)
-    visGrid = np.zeros((len(num_ids), len(num_ids)))
-    for p in allPairs:
-        visGrid[np.argwhere(num_ids == p[0]),
-                np.argwhere(num_ids == p[1])] += 1
-        if p[1] != p[0]:
-            visGrid[np.argwhere(num_ids == p[1]),
-                    np.argwhere(num_ids == p[0])] += 1
+def cluster_data_and_show_heatmap(movies):
+    visgrid = make_visgrid(movies)
 
     model = SpectralCoclustering(n_clusters=5)
     model.fit(visGrid)
@@ -122,12 +127,12 @@ def cluster_data_and_show_heatmap(movies_list):
     fit_data = visGrid[np.argsort(model.row_labels_)]
     fit_data = fit_data[:, np.argsort(model.column_labels_)]
 
-    annot_lookup_sorted = []
+    sorted_genre_names = []
     for i in np.argsort(model.row_labels_):
-        annot_lookup_sorted.append(Genre_ID_to_name[num_ids[i]])
+        sorted_genre_names.append(Genre_ID_to_name[num_ids[i]])
 
-    sns.heatmap(fit_data, xticklabels=annot_lookup_sorted,
-                yticklabels=annot_lookup_sorted, annot=False)
+    sns.heatmap(fit_data, xticklabels=sorted_genre_names,
+                yticklabels=sorted_genre_names, annot=False)
     plt.title("After biclustering; rearranged to show biclusters")
     plt.show()
 
@@ -135,7 +140,6 @@ def cluster_data_and_show_heatmap(movies_list):
 def pull_top_1000_movies_from_internet():
     all_movies = tmdb.Movies()
     top1000_movies = []
-    print('Pulling movie list, Please wait...')
     for i in range(1, 51):
         if i % 15 == 0:
             time.sleep(7)
@@ -145,7 +149,6 @@ def pull_top_1000_movies_from_internet():
     f = open('movie_list.pckl', 'wb')
     pickle.dump(top1000_movies, f)
     f.close()
-    print('Done')
 
 
 def load_top1000_movies_from_pickle():
@@ -232,22 +235,10 @@ def load_posters_for_movies_from_pickle(movies):
 def list2pairs(l):
     # itertools.combinations(l,2) makes all pairs of length 2 from list l.
     pairs = list(itertools.combinations(l, 2))
-    # Get the one item pairs, duplicate pairs aren't accounted for by itertools
+    # Get the one item pairs, duplicate pairs aren't included by itertools
     for i in l:
         pairs.append([i, i])
     return pairs
-
-
-def grab_poster_tmdb(movie):
-    response = search.movie(query=movie)
-    id = response['results'][0]['id']
-    movie = tmdb.Movies(id)
-    poster_path = movie.info()['poster_path']
-    title = movie.info()['original_title']
-    url = 'image.tmdb.org/t/p/original' + poster_path
-    title = '_'.join(title.split(' '))
-    output_file = poster_folder + title + '.jpg'
-    urllib.request.urlretrieve(url, filename=output_file)
 
 
 def get_movie_id_tmdb(movie):
@@ -256,26 +247,32 @@ def get_movie_id_tmdb(movie):
     return movie_id
 
 
+def grab_poster_tmdb(movie):
+    movie = tmdb.Movies(get_movie_id_tmdb(movie))
+    poster_path = movie.info()['poster_path']
+    title = movie.info()['original_title']
+    url = 'image.tmdb.org/t/p/original' + poster_path
+    title = '_'.join(title.split(' '))
+    output_file = poster_folder + title + '.jpg'
+    urllib.request.urlretrieve(url, filename=output_file)
+
+
 def get_movie_info_tmdb(movie):
-    response = search.movie(query=movie)
-    id = response['results'][0]['id']
-    movie = tmdb.Movies(id)
+    movie = tmdb.Movies(get_movie_id_tmdb(movie))
     info = movie.info()
     return info
+
+
+def get_movie_genres_tmdb(movie):
+    movie = tmdb.Movies(get_movie_id_tmdb(movie))
+    genres = movie.info()['genres']
+    return genres
 
 
 def get_movie_genres_imdb(movie):
     imbd_results = imbd_object.search_for_title(movie)
     movie = imbd_object.get_title_by_id(imbd_results[0]['imdb_id'])
     return movie.genres
-
-
-def get_movie_genres_tmdb(movie):
-    response = search.movie(query=movie)
-    id = response['results'][0]['id']
-    movie = tmdb.Movies(id)
-    genres = movie.info()['genres']
-    return genres
 
 
 if __name__ == "__main__":
