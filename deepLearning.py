@@ -211,19 +211,19 @@ def pull_posters_for_movies_from_internet(movies):
                 poster_movies.append(movie)
             except:
                 movies_no_poster.append(movie)
-    f = open('poster_movies.pckl', 'w')
+    f = open('poster_movies.pckl', 'wb')
     pickle.dump(poster_movies, f)
     f.close()
-    f = open('no_poster_movies.pckl', 'w')
+    f = open('no_poster_movies.pckl', 'wb')
     pickle.dump(movies_no_poster, f)
     f.close()
 
 
 def load_posters_for_movies_from_pickle(movies):
-    f = open('poster_movies.pckl', 'r')
+    f = open('poster_movies.pckl', 'rb')
     poster_movies = pickle.load(f)
     f.close()
-    f = open('no_poster_movies.pckl', 'r')
+    f = open('no_poster_movies.pckl', 'rb')
     movies_no_poster = pickle.load(f)
     f.close()
     return (poster_movies, movies_no_poster)
