@@ -22,18 +22,15 @@ if poster_folder.split('/')[0] not in os.listdir('./'):
     os.mkdir('./' + poster_folder)
 
 search = tmdb.Search()
-imbd_object = Imdb()
-imdb = Imdb(anonymize=True)  # to proxy requests
+imbd_object = Imdb(anonymize=True)  # to proxy requests
 
 
 def make_genre_dict():
     genres = tmdb.Genres()
     list_of_genres = genres.list()['genres']
     genre_dict = {}
-    for i in range(len(list_of_genres)):
-        genre_id = list_of_genres[i]['id']
-        genre_name = list_of_genres[i]['name']
-        genre_dict[genre_id] = genre_name
+    for g in list_of_genres:
+        genre_dict[g['id']] = g['name']
 
     return genre_dict
 
@@ -140,6 +137,7 @@ def cluster_data_and_show_heatmap(movies):
 def pull_top_1000_movies_from_internet():
     all_movies = tmdb.Movies()
     top1000_movies = []
+    print("Pulling Top 1000 movies from TMBD...")
     for i in range(1, 51):
         if i % 15 == 0:
             time.sleep(7)
@@ -149,6 +147,7 @@ def pull_top_1000_movies_from_internet():
     f = open('movie_list.pckl', 'wb')
     pickle.dump(top1000_movies, f)
     f.close()
+    print("Done")
 
 
 def load_top1000_movies_from_pickle():
@@ -168,6 +167,7 @@ def pull_movies_for_all_unique_genre_pairs_from_internet():
     baseyear = 2017
 
     done_ids = []
+    print("Pulling unique movies from TMBD (total %s)...", num_ids)
     for g_id in num_ids:
         baseyear -= 1
         for page in range(1, 6):
@@ -189,6 +189,7 @@ def pull_movies_for_all_unique_genre_pairs_from_internet():
     f = open("movies_for_posters.pckl", 'wb')
     pickle.dump(movies, f)
     f.close()
+    print("Done")
 
 
 def load_movies_for_all_unique_genre_pairs_from_pickle():
@@ -201,6 +202,7 @@ def load_movies_for_all_unique_genre_pairs_from_pickle():
 def pull_posters_for_movies_from_internet(movies):
     poster_movies = []
     movies_no_poster = []
+    print("Pulling posters for movies from TMBD (total %s)...", len(movies))
     for movie in movies:
         id = movie['id']
         title = movie['title']
@@ -220,6 +222,7 @@ def pull_posters_for_movies_from_internet(movies):
     f = open('no_poster_movies.pckl', 'wb')
     pickle.dump(movies_no_poster, f)
     f.close()
+    print("Done")
 
 
 def load_posters_for_movies_from_pickle(movies):
@@ -254,7 +257,8 @@ def grab_poster_tmdb(movie):
     url = 'image.tmdb.org/t/p/original' + poster_path
     title = '_'.join(title.split(' '))
     output_file = poster_folder + title + '.jpg'
-    urllib.request.urlretrieve(url, filename=output_file)
+    if not os.path.exists(output_file):
+        urllib.request.urlretrieve(url, filename=output_file)
 
 
 def get_movie_info_tmdb(movie):
