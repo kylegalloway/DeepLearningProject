@@ -212,16 +212,13 @@ def pull_posters_for_movies_from_internet(movies):
             print("Done with {0} movies out of {1} total".format(
                 counter, len(movies)))
         try:
-            print("Grabbing: {0}".format(title))
             grab_poster_tmdb(title)
-            print("1st try!")
             poster_movies.append(movie)
+            print("Failed to download: {0}. Trying again in 7s".format(title))
         except:
             try:
                 time.sleep(7)
-                print("2nd try at: {0}".format(title))
                 grab_poster_tmdb(title)
-                print("Got it 2nd time")
                 poster_movies.append(movie)
             except:
                 movies_no_poster.append(movie)
