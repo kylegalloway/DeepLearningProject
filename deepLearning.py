@@ -214,8 +214,8 @@ def pull_posters_for_movies_from_internet(movies):
         try:
             grab_poster_tmdb(title)
             poster_movies.append(movie)
-            print("Failed to download: {0}. Trying again in 7s".format(title))
         except:
+            print("Failed to download: {0}. Trying again in 7s".format(title))
             try:
                 time.sleep(7)
                 grab_poster_tmdb(title)
@@ -267,9 +267,9 @@ def grab_poster_tmdb(movie):
         url = 'http://image.tmdb.org/t/p/original' + poster_path
         title = '_'.join(title.split(' '))
         output_file = poster_folder + title + '.jpg'
-        print("Poster: ".format(title))
+        print("Grabbing: {0}".format(title + '.jpg'))
         if not os.path.exists(output_file):
-            print("Does not exist. Grabbing...")
+            print("Does not exist. Downloading...")
             urllib.request.urlretrieve(url, filename=output_file)
 
 
