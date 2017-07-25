@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
+import re
 import seaborn as sns
 import time
 import tmdbsimple as tmdb
@@ -12,6 +13,15 @@ import urllib.request
 
 from imdbpie import Imdb
 from sklearn.cluster import SpectralCoclustering
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.metrics import classification_report
+from sklearn.metrics import f1_score
+from sklearn.metrics import make_scorer
+from sklearn.model_selection import GridSearchCV
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.svm import SVC
 
 api_key = ''
 tmdb.API_KEY = api_key
@@ -31,6 +41,8 @@ def make_genre_dict():
     genre_dict = {}
     for g in list_of_genres:
         genre_dict[g['id']] = g['name']
+    # Add Foreign genre. It isn't given in genres.list()
+    genre_dict[10769] = "Foreign"
 
     return genre_dict
 
@@ -54,12 +66,90 @@ def main():
     movies = load_movies_for_all_unique_genre_pairs_from_pickle()
     unique_movies = remove_duplicates(movies)
 
-    movies_with_overviews = remove_movies_without_overviews(unique_movies)
-
     # Only use once, then use the pickle file afterwards
     # pull_posters_for_movies_from_internet(unique_movies)
     movies_with_poster = load_posters_for_movies_from_pickle(movies)[0]
     movies_without_poster = load_posters_for_movies_from_pickle(movies)[1]
+
+    movies_with_overviews = remove_movies_without_overviews(unique_movies)
+
+    genres = []
+    all_ids = []
+    for i in range(len(movies_with_overviews)):
+        movie = movies_with_overviews[i]
+        id = movie['id']
+        genre_ids = movie['genre_ids']
+        genres.append(genre_ids)
+        all_ids.extend(genre_ids)
+    mlb = MultiLabelBinarizer()
+    Y = mlb.fit_transform(genres)
+
+    content = []
+    for i in range(len(movies_with_overviews)):
+        movie = movies_with_overviews[i]
+        id = movie['id']
+        overview = movie['overview']
+        overview = overview.replace(',', '')
+        overview = overview.replace('.', '')
+        content.append(overview)
+
+    vectorize = CountVectorizer(max_df=0.95, min_df=0.005)
+    X = vectorize.fit_transform(content)
+    f4 = open('X.pckl', 'wb')
+    f5 = open('Y.pckl', 'wb')
+    pickle.dump(X, f4)
+    pickle.dump(Y, f5)
+    f6 = open('Genredict.pckl', 'wb')
+    pickle.dump(Genre_ID_to_name, f6)
+    f4.close()
+    f5.close()
+    f6.close()
+
+    # SVM model
+    tfidf_transformer = TfidfTransformer()
+    X_tfidf = tfidf_transformer.fit_transform(X)
+    msk = np.random.rand(X_tfidf.shape[0]) < 0.8
+    X_train_tfidf = X_tfidf[msk]
+    X_test_tfidf = X_tfidf[~msk]
+    Y_train = Y[msk]
+    Y_test = Y[~msk]
+    positions = range(len(movies_with_overviews))
+    test_movies = np.asarray(positions)[~msk]
+    parameters = {'kernel': ['linear'], 'C': [0.01, 0.1, 1.0]}
+    gridCV = GridSearchCV(SVC(class_weight='balanced'), parameters,
+                          scoring=make_scorer(f1_score, average='micro'))
+    classif = OneVsRestClassifier(gridCV)
+
+    classif.fit(X_train_tfidf, Y_train)
+
+    predstfidf = classif.predict(X_test_tfidf)
+    genre_names = []
+    allPairs = []
+    for movie in movies:
+        allPairs.extend(list2pairs(movie['genre_ids']))
+
+    num_ids = np.unique(allPairs)
+    for i in range(len(num_ids)):
+        genre_names.append(Genre_ID_to_name[num_ids[i]])
+    print(classification_report(Y_test, predstfidf, target_names=genre_names))
+
+    genre_list = sorted(list(Genre_ID_to_name.keys()))
+    predictions = []
+    for i in range(X_test_tfidf.shape[0]):
+        pred_genres = []
+        movie_label_scores = predstfidf[i]
+        for j in range(20):
+            if movie_label_scores[j] != 0:
+                genre = Genre_ID_to_name[genre_list[j]]
+                pred_genres.append(genre)
+        predictions.append(pred_genres)
+    f = open('classifer_svc.pckl', 'wb')
+    pickle.dump(classif, f)
+    f.close()
+    for i in range(X_test_tfidf.shape[0]):
+        if i % 50 == 0 and i != 0:
+            print("MOVIE: {0}\tPREDICTION: {1}".format(
+                movies_with_overviews[i]['title'], ','.join(predictions[i])))
 
 
 def remove_duplicates(movies):
