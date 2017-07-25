@@ -39,8 +39,8 @@ Genre_ID_to_name = make_genre_dict()
 
 
 def main():
-    # print("TMDB: ", get_movie_genres_tmdb("The Sandlot"))
-    # print("IMDB: ", get_movie_genres_imdb("The Sandlot"))
+    # print("TMDB: ".format(get_movie_genres_tmdb("The Sandlot")))
+    # print("IMDB: ".format(get_movie_genres_imdb("The Sandlot")))
 
     # Only use once, then use the pickle file afterwards
     # pull_top_1000_movies_from_internet()
@@ -50,7 +50,7 @@ def main():
     # cluster_data_and_show_heatmap(top1000_movies)
 
     # Only use once, then use the pickle file afterwards
-    # pull_movies_for_all_unique_genre_pairs_from_internet()
+    # pull_movies_for_all_unique_genre_pairs_from_internet(top1000_movies)
     movies = load_movies_for_all_unique_genre_pairs_from_pickle()
     unique_movies = remove_duplicates(movies)
 
@@ -157,9 +157,9 @@ def load_top1000_movies_from_pickle():
     return top1000_movies
 
 
-def pull_movies_for_all_unique_genre_pairs_from_internet():
+def pull_movies_for_all_unique_genre_pairs_from_internet(movies):
     allPairs = []
-    for movie in top1000_movies:
+    for movie in movies:
         allPairs.extend(list2pairs(movie['genre_ids']))
 
     num_ids = np.unique(allPairs)
@@ -167,7 +167,7 @@ def pull_movies_for_all_unique_genre_pairs_from_internet():
     baseyear = 2017
 
     done_ids = []
-    print("Pulling unique movies from TMBD (total %s)...", num_ids)
+    print("Pulling unique movies from TMBD (total {0})...".format(num_ids))
     for g_id in num_ids:
         baseyear -= 1
         for page in range(1, 6):
@@ -179,7 +179,6 @@ def pull_movies_for_all_unique_genre_pairs_from_internet():
             url += str(baseyear)
             url += '&with_genres=' + str(g_id) + '&page=' + str(page)
 
-            print(url)
             data = urllib.request.urlopen(url).read().decode('UTF-8')
 
             dataDict = json.loads(data)
@@ -201,21 +200,34 @@ def load_movies_for_all_unique_genre_pairs_from_pickle():
 
 def pull_posters_for_movies_from_internet(movies):
     poster_movies = []
+    counter = 0
     movies_no_poster = []
-    print("Pulling posters for movies from TMBD (total %s)...", len(movies))
+    print("Pulling movie posters from TMBD (total {0})...".format(len(movies)))
     for movie in movies:
         id = movie['id']
         title = movie['title']
+        # if counter == 1:
+        #     print('Downloaded first. Code is working fine. Please wait...')
+        if counter % 300 == 0 and counter != 0:
+            print("Done with {0} movies out of {1} total".format(
+                counter, len(movies)))
         try:
+            print("Grabbing: {0}".format(title))
             grab_poster_tmdb(title)
+            print("1st try!")
             poster_movies.append(movie)
         except:
             try:
                 time.sleep(7)
+                print("2nd try at: {0}".format(title))
                 grab_poster_tmdb(title)
+                print("Got it 2nd time")
                 poster_movies.append(movie)
             except:
                 movies_no_poster.append(movie)
+                print("Failed to download: {0}".format(title))
+        counter += 1
+
     f = open('poster_movies.pckl', 'wb')
     pickle.dump(poster_movies, f)
     f.close()
@@ -254,11 +266,14 @@ def grab_poster_tmdb(movie):
     movie = tmdb.Movies(get_movie_id_tmdb(movie))
     poster_path = movie.info()['poster_path']
     title = movie.info()['original_title']
-    url = 'image.tmdb.org/t/p/original' + poster_path
-    title = '_'.join(title.split(' '))
-    output_file = poster_folder + title + '.jpg'
-    if not os.path.exists(output_file):
-        urllib.request.urlretrieve(url, filename=output_file)
+    if poster_path:
+        url = 'http://image.tmdb.org/t/p/original' + poster_path
+        title = '_'.join(title.split(' '))
+        output_file = poster_folder + title + '.jpg'
+        print("Poster: ".format(title))
+        if not os.path.exists(output_file):
+            print("Does not exist. Grabbing...")
+            urllib.request.urlretrieve(url, filename=output_file)
 
 
 def get_movie_info_tmdb(movie):
